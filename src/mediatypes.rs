@@ -54,6 +54,9 @@ impl MediaTypes {
   pub fn from_mime(mtype: &mime::Mime) -> Result<Self> {
     match (mtype.type_(), mtype.subtype(), mtype.suffix()) {
       (mime::APPLICATION, mime::JSON, _) => Ok(MediaTypes::ApplicationJson),
+      (mime::APPLICATION, subt, None) if subt == "vnd.docker.image.rootfs.diff.tar.gzip" => {
+        Ok(MediaTypes::ImageLayerTgz)
+      }
       (mime::APPLICATION, subt, Some(suff)) => match (subt.to_string().as_str(), suff.to_string().as_str()) {
         // Docker
         ("vnd.docker.distribution.manifest.v1", "json") => Ok(MediaTypes::ManifestV2S1),
@@ -82,5 +85,68 @@ impl MediaTypes {
       }
     }
     .expect("to_mime should be always successful")
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::str::FromStr;
+
+  use super::*;
+
+  #[test]
+  fn test_roundtrip_to_mime_from_mime() {
+    let types = [
+      MediaTypes::ManifestV2S1,
+      MediaTypes::ManifestV2S1Signed,
+      MediaTypes::ManifestV2S2,
+      MediaTypes::ManifestList,
+      MediaTypes::ImageLayerTgz,
+      MediaTypes::ContainerConfigV1,
+      MediaTypes::OciImageManifest,
+      MediaTypes::OciImageIndexV1,
+      MediaTypes::ApplicationJson,
+    ];
+    for mt in &types {
+      let mime = mt.to_mime();
+      let back = MediaTypes::from_mime(&mime).unwrap();
+      assert_eq!(&back, mt, "roundtrip failed for {mt:?}");
+    }
+  }
+
+  #[test]
+  fn test_from_str_roundtrip() {
+    let types = [
+      "application/vnd.docker.distribution.manifest.v2+json",
+      "application/vnd.docker.distribution.manifest.v1+prettyjws",
+      "application/vnd.docker.distribution.manifest.list.v2+json",
+      "application/vnd.oci.image.manifest.v1+json",
+      "application/vnd.oci.image.index.v1+json",
+      "application/json",
+    ];
+    for s in &types {
+      let mt = MediaTypes::from_str(s).unwrap();
+      assert_eq!(&mt.to_string(), s, "roundtrip failed for {s}");
+    }
+  }
+
+  #[test]
+  fn test_from_mime_unknown_type() {
+    let mime: mime::Mime = "text/plain".parse().unwrap();
+    let result = MediaTypes::from_mime(&mime);
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_from_mime_unknown_application_subtype() {
+    let mime: mime::Mime = "application/vnd.unknown.type.v1+json".parse().unwrap();
+    let result = MediaTypes::from_mime(&mime);
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_from_str_invalid() {
+    let result = MediaTypes::from_str("not/a/valid/media/type");
+    assert!(result.is_err());
   }
 }
