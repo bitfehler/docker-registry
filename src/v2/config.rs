@@ -184,3 +184,117 @@ impl Default for Config {
     }
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_config_default() {
+    let config = Config::default();
+    assert_eq!(config.index, "registry-1.docker.io");
+    assert!(!config.insecure_registry);
+    assert!(!config.accept_invalid_certs);
+    assert!(config.username.is_none());
+    assert!(config.password.is_none());
+    assert!(config.accepted_types.is_none());
+    assert_eq!(config.user_agent.as_deref(), Some(crate::USER_AGENT));
+  }
+
+  #[test]
+  fn test_config_builder_chaining() {
+    let config = Config::default()
+      .registry("myregistry.io")
+      .insecure_registry(true)
+      .accept_invalid_certs(true)
+      .username(Some("user".to_string()))
+      .password(Some("pass".to_string()))
+      .user_agent(Some("test-agent".to_string()));
+
+    assert_eq!(config.index, "myregistry.io");
+    assert!(config.insecure_registry);
+    assert!(config.accept_invalid_certs);
+    assert_eq!(config.username.as_deref(), Some("user"));
+    assert_eq!(config.password.as_deref(), Some("pass"));
+    assert_eq!(config.user_agent.as_deref(), Some("test-agent"));
+  }
+
+  #[test]
+  fn test_config_build_insecure() {
+    let client = Config::default()
+      .registry("localhost:5000")
+      .insecure_registry(true)
+      .build()
+      .unwrap();
+    assert!(client.base_url.starts_with("http://"));
+  }
+
+  #[test]
+  fn test_config_build_secure() {
+    let client = Config::default()
+      .registry("myregistry.io")
+      .insecure_registry(false)
+      .build()
+      .unwrap();
+    assert!(client.base_url.starts_with("https://"));
+  }
+
+  #[test]
+  fn test_config_build_credentials() {
+    let client = Config::default()
+      .registry("myregistry.io")
+      .username(Some("user".to_string()))
+      .password(Some("pass".to_string()))
+      .build()
+      .unwrap();
+    assert_eq!(client.credentials, Some(("user".to_string(), "pass".to_string())));
+  }
+
+  #[test]
+  fn test_config_build_no_credentials() {
+    let client = Config::default().registry("myregistry.io").build().unwrap();
+    assert!(client.credentials.is_none());
+  }
+
+  #[test]
+  fn test_config_build_partial_credentials_username_only() {
+    let client = Config::default()
+      .registry("myregistry.io")
+      .username(Some("user".to_string()))
+      .build()
+      .unwrap();
+    assert_eq!(client.credentials, Some(("user".to_string(), "".to_string())));
+  }
+
+  #[test]
+  fn test_config_read_credentials() {
+    // base64("user:pass") = "dXNlcjpwYXNz"
+    let config_json = r#"{"auths":{"myregistry.io":{"auth":"dXNlcjpwYXNz"}}}"#;
+    let config = Config::default()
+      .registry("myregistry.io")
+      .read_credentials(config_json.as_bytes());
+    assert_eq!(config.username.as_deref(), Some("user"));
+    assert_eq!(config.password.as_deref(), Some("pass"));
+  }
+
+  #[test]
+  fn test_config_read_credentials_missing_registry() {
+    let config_json = r#"{"auths":{"other.io":{"auth":"dXNlcjpwYXNz"}}}"#;
+    let config = Config::default()
+      .registry("myregistry.io")
+      .read_credentials(config_json.as_bytes());
+    // Should silently fail and leave credentials as None
+    assert!(config.username.is_none());
+    assert!(config.password.is_none());
+  }
+
+  #[test]
+  fn test_config_timeout_fields() {
+    let config = Config::default()
+      .connect_timeout(std::time::Duration::from_secs(5))
+      .request_timeout(std::time::Duration::from_secs(30));
+
+    assert_eq!(config.connect_timeout, Some(std::time::Duration::from_secs(5)));
+    assert_eq!(config.request_timeout, Some(std::time::Duration::from_secs(30)));
+  }
+}
