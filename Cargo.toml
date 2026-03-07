@@ -16,10 +16,17 @@ keywords = [
   "registry",
   "async",
 ]
+categories = [
+  "api-bindings",
+  "asynchronous",
+  "network-programming",
+]
 exclude = [
   ".gitignore",
-  "certificates",
-  "tests",
+  ".github/",
+  "cliff.toml",
+  "rustfmt.toml",
+  "tests/",
 ]
 edition = "2024"
 
