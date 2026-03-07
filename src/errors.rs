@@ -67,4 +67,10 @@ mod tests {
     fn check_bounds<T: Send + Sync + 'static>() {}
     check_bounds::<Error>();
   }
+
+  #[test]
+  fn test_client_bounds() {
+    fn check_bounds<T: Send + Sync + 'static>() {}
+    check_bounds::<crate::v2::Client>();
+  }
 }
