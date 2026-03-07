@@ -1,7 +1,5 @@
 use futures::StreamExt;
 
-type Fallible<T> = Result<T, Box<dyn std::error::Error>>;
-
 #[tokio::test]
 async fn test_get_manifest_server_error() {
   let name = "my-repo/my-image";
