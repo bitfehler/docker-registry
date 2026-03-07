@@ -36,7 +36,7 @@ static DEFAULT_TAG: &str = "latest";
 static DEFAULT_SCHEME: &str = "docker";
 
 /// Image version, either a tag or a digest.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Version {
   Tag(String),
   Digest(String, String),
