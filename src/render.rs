@@ -97,13 +97,134 @@ where
 // error is non-fatal.  Otherwise still return error for other
 // failures.
 fn remove_whiteout(path: path::PathBuf) -> io::Result<()> {
-  let res = fs::remove_dir_all(path);
+  if path.is_dir() {
+    let res = fs::remove_dir_all(&path);
+    match res {
+      Ok(_) => Ok(()),
+      Err(ref e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+      Err(e) => Err(e),
+    }
+  } else {
+    let res = fs::remove_file(&path);
+    match res {
+      Ok(_) => Ok(()),
+      Err(ref e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+      Err(e) => Err(e),
+    }
+  }
+}
 
-  match res {
-    Ok(_) => res,
-    Err(ref e) => match e.kind() {
-      io::ErrorKind::NotFound => Ok(()),
-      _ => res,
-    },
+#[cfg(test)]
+mod tests {
+  use std::{io::Write, path::Path};
+
+  use super::*;
+
+  /// Helper: create a gzip-compressed tar archive containing a single file.
+  fn make_layer(file_name: &str, content: &[u8]) -> Vec<u8> {
+    let mut tar_buf = Vec::new();
+    {
+      let mut builder = tar::Builder::new(&mut tar_buf);
+      let mut header = tar::Header::new_gnu();
+      header.set_path(file_name).unwrap();
+      header.set_size(content.len() as u64);
+      header.set_mode(0o644);
+      header.set_cksum();
+      builder.append(&header, content).unwrap();
+      builder.finish().unwrap();
+    }
+    let mut gz_buf = Vec::new();
+    {
+      let mut encoder = gzip::Encoder::new(&mut gz_buf).unwrap();
+      encoder.write_all(&tar_buf).unwrap();
+      encoder.finish().into_result().unwrap();
+    }
+    gz_buf
+  }
+
+  /// Helper: create a layer with a whiteout marker file.
+  fn make_whiteout_layer(whiteout_path: &str) -> Vec<u8> {
+    make_layer(whiteout_path, b"")
+  }
+
+  #[test]
+  fn test_unpack_single_layer() {
+    let dir = tempfile::tempdir().unwrap();
+    let layer = make_layer("hello.txt", b"hello world");
+    unpack(&[layer], dir.path()).unwrap();
+    let content = fs::read_to_string(dir.path().join("hello.txt")).unwrap();
+    assert_eq!(content, "hello world");
+  }
+
+  #[test]
+  fn test_unpack_multiple_layers() {
+    let dir = tempfile::tempdir().unwrap();
+    let layer1 = make_layer("file1.txt", b"content1");
+    let layer2 = make_layer("file2.txt", b"content2");
+    unpack(&[layer1, layer2], dir.path()).unwrap();
+    assert_eq!(fs::read_to_string(dir.path().join("file1.txt")).unwrap(), "content1");
+    assert_eq!(fs::read_to_string(dir.path().join("file2.txt")).unwrap(), "content2");
+  }
+
+  #[test]
+  fn test_unpack_layer_overwrites_previous() {
+    let dir = tempfile::tempdir().unwrap();
+    let layer1 = make_layer("file.txt", b"old");
+    let layer2 = make_layer("file.txt", b"new");
+    unpack(&[layer1, layer2], dir.path()).unwrap();
+    assert_eq!(fs::read_to_string(dir.path().join("file.txt")).unwrap(), "new");
+  }
+
+  #[test]
+  fn test_unpack_relative_path_rejected() {
+    let layer = make_layer("hello.txt", b"hello");
+    let result = unpack(&[layer], Path::new("relative/path"));
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_unpack_nonexistent_path_rejected() {
+    let layer = make_layer("hello.txt", b"hello");
+    let result = unpack(&[layer], Path::new("/nonexistent/path/that/does/not/exist"));
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_unpack_empty_layers() {
+    let dir = tempfile::tempdir().unwrap();
+    unpack(&[], dir.path()).unwrap();
+    // Should succeed with no files created
+  }
+
+  #[test]
+  fn test_filter_unpack_includes_matching() {
+    let dir = tempfile::tempdir().unwrap();
+    let layer = make_layer("include-me.txt", b"included");
+    filter_unpack(&[layer], dir.path(), |p| p.to_string_lossy().contains("include")).unwrap();
+    assert!(dir.path().join("include-me.txt").exists());
+  }
+
+  #[test]
+  fn test_filter_unpack_excludes_non_matching() {
+    let dir = tempfile::tempdir().unwrap();
+    let layer = make_layer("exclude-me.txt", b"excluded");
+    filter_unpack(&[layer], dir.path(), |p| p.to_string_lossy().contains("include")).unwrap();
+    assert!(!dir.path().join("exclude-me.txt").exists());
+  }
+
+  #[test]
+  fn test_whiteout_removes_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let layer1 = make_layer("myfile.txt", b"content");
+    let layer2 = make_whiteout_layer(".wh.myfile.txt");
+    unpack(&[layer1, layer2], dir.path()).unwrap();
+    assert!(!dir.path().join("myfile.txt").exists());
+  }
+
+  #[test]
+  fn test_unpack_invalid_gzip() {
+    let dir = tempfile::tempdir().unwrap();
+    let result = unpack(&[b"not gzip data".to_vec()], dir.path());
+    assert!(result.is_err());
   }
 }
