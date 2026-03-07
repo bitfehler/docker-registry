@@ -27,7 +27,7 @@
 // The `docker://` schema is not officially documented, but has a reference implementation:
 // https://github.com/docker/distribution/blob/v2.6.1/reference/reference.go
 
-use std::{collections::VecDeque, fmt, str, str::FromStr};
+use std::{collections::VecDeque, fmt, str, str::FromStr, sync::LazyLock};
 
 use regex_lite::Regex;
 
@@ -172,6 +172,24 @@ pub enum ReferenceParseError {
   RepositoryNameTooLong,
 }
 
+static REGISTRY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+  Regex::new(
+    r"(?x)
+        ^
+        # hostname
+        (([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)+([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])
+
+        # optional port
+        ([:][0-9]{1,6})?
+        $
+    ",
+  )
+  .expect("hardcoded regex is invalid")
+});
+
+static PATH_REGEX: LazyLock<Regex> =
+  LazyLock::new(|| Regex::new("^[a-z0-9]+(?:[._-][a-z0-9]+)*$").expect("hardcoded regex is invalid"));
+
 fn parse_url(input: &str) -> Result<Reference, ReferenceParseError> {
   // TODO(lucab): investigate using a grammar-based parser.
   let mut rest = input;
@@ -189,20 +207,7 @@ fn parse_url(input: &str) -> Result<Reference, ReferenceParseError> {
   // default registry if it's not.
   let first = components.pop_front().ok_or(ReferenceParseError::MissingImageName)?;
 
-  let registry = if Regex::new(
-    r"(?x)
-        ^
-        # hostname
-        (([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)+([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])
-
-        # optional port
-        ([:][0-9]{1,6})?
-        $
-    ",
-  )
-  .expect("hardcoded regex is invalid")
-  .is_match(&first)
-  {
+  let registry = if REGISTRY_REGEX.is_match(&first) {
     first
   } else {
     components.push_front(first);
@@ -232,9 +237,8 @@ fn parse_url(input: &str) -> Result<Reference, ReferenceParseError> {
   // Check if all path components conform to the regex at
   // https://docs.docker.com/registry/spec/api/#overview.
   const REGEX: &str = "^[a-z0-9]+(?:[._-][a-z0-9]+)*$";
-  let path_re = Regex::new(REGEX).expect("hardcoded regex is invalid");
   components.iter().try_for_each(|component| {
-    if !path_re.is_match(component) {
+    if !PATH_REGEX.is_match(component) {
       return Err(ReferenceParseError::RegexViolation {
         component: component.clone(),
         regex: REGEX,

@@ -1,4 +1,5 @@
 use std::convert::{TryFrom, TryInto};
+use std::sync::LazyLock;
 
 use log::{trace, warn};
 use regex_lite::Regex;
@@ -149,6 +150,8 @@ pub enum WwwHeaderParseError {
   FieldMethodMissing,
 }
 
+static AUTH_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(REGEX).expect("this static regex is valid"));
+
 impl WwwAuthenticateHeaderContent {
   /// Create a `WwwAuthenticateHeaderContent` by parsing a `HeaderValue` instance.
   pub(crate) fn from_www_authentication_header(header_value: HeaderValue) -> Result<Self> {
@@ -156,8 +159,7 @@ impl WwwAuthenticateHeaderContent {
 
     // This regex will result in multiple captures which will contain one key-value pair each.
     // The first capture will be the only one with the "method" group set.
-    let re = Regex::new(REGEX).expect("this static regex is valid");
-    let captures = re.captures_iter(&header).collect::<Vec<_>>();
+    let captures = AUTH_REGEX.captures_iter(&header).collect::<Vec<_>>();
 
     let method = captures
       .first()
