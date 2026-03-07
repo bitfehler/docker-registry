@@ -51,6 +51,8 @@ mod tags;
 
 mod blobs;
 
+mod referrers;
+
 mod content_digest;
 pub(crate) use self::content_digest::ContentDigest;
 pub use self::content_digest::ContentDigestError;
