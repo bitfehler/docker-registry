@@ -130,14 +130,14 @@ impl Client {
   }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ApiError {
   code: String,
   message: Option<String>,
   detail: Option<Box<serde_json::value::RawValue>>,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, thiserror::Error)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, thiserror::Error)]
 pub struct ApiErrors {
   errors: Option<Vec<ApiError>>,
 }

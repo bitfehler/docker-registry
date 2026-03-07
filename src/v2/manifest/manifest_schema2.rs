@@ -10,7 +10,7 @@ pub use crate::v2::ApiErrors;
 /// Manifest version 2 schema 2.
 ///
 /// Specification is at <https://docs.docker.com/registry/spec/manifest-v2-2/>.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ManifestSchema2Spec {
   #[serde(rename = "schemaVersion")]
   schema_version: u16,
@@ -21,7 +21,7 @@ pub struct ManifestSchema2Spec {
 }
 
 /// Super-type for combining a ManifestSchema2 with a ConfigBlob.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct ManifestSchema2 {
   pub manifest_spec: ManifestSchema2Spec,
   pub config_blob: ConfigBlob,
@@ -40,19 +40,19 @@ pub struct Config {
 /// The remaining fields according to [the image spec v1][image-spec-v1] are not covered.
 ///
 /// [image-spec-v1]: https://github.com/moby/moby/blob/a30990b3c8d0d42280fa501287859e1d2393a951/image/spec/v1.md#image-json-description
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigBlob {
   architecture: String,
   config: InnerConfigBlob,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct InnerConfigBlob {
   #[serde(rename = "Labels")]
   labels: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct S2Layer {
   #[serde(rename = "mediaType")]
   media_type: String,
@@ -62,7 +62,7 @@ struct S2Layer {
 }
 
 /// Manifest List.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ManifestList {
   #[serde(rename = "schemaVersion")]
   schema_version: u16,
@@ -72,7 +72,7 @@ pub struct ManifestList {
 }
 
 /// Manifest object.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ManifestObj {
   #[serde(rename = "mediaType")]
   media_type: String,
@@ -82,7 +82,7 @@ pub struct ManifestObj {
 }
 
 /// Platform-related manifest entries.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Platform {
   pub architecture: String,
   pub os: String,

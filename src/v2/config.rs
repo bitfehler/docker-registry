@@ -4,7 +4,7 @@ use reqwest::Certificate;
 use crate::{mediatypes::MediaTypes, v2::*};
 
 /// Configuration for a `Client`.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Config {
   index: String,
   insecure_registry: bool,

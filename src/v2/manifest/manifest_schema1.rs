@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Manifest version 2 schema 1, signed.
 ///
 /// Specification is at <https://docs.docker.com/registry/spec/manifest-v2-1/>.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ManifestSchema1Signed {
   #[serde(rename = "schemaVersion")]
   schema_version: u16,
@@ -18,7 +18,7 @@ pub struct ManifestSchema1Signed {
   signatures: Vec<Signature>,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct Signature {
   // TODO(lucab): switch to jsonwebtokens crate
   // https://github.com/Keats/rust-jwt/pull/23
@@ -28,13 +28,13 @@ struct Signature {
 }
 
 /// Compatibility entry for version 1 manifest interoperability.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct V1Compat {
   #[serde(rename = "v1Compatibility")]
   v1_compat: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct S1Layer {
   #[serde(rename = "blobSum")]
   blob_sum: String,
