@@ -14,6 +14,8 @@ pub struct Config {
   accept_invalid_certs: bool,
   root_certificates: Vec<Certificate>,
   accepted_types: Option<Vec<(MediaTypes, Option<f64>)>>,
+  connect_timeout: Option<std::time::Duration>,
+  request_timeout: Option<std::time::Duration>,
 }
 
 impl Config {
@@ -83,6 +85,20 @@ impl Config {
     self
   }
 
+  /// Set the connect timeout for the HTTP client.
+  #[must_use]
+  pub fn connect_timeout(mut self, timeout: std::time::Duration) -> Self {
+    self.connect_timeout = Some(timeout);
+    self
+  }
+
+  /// Set the overall request timeout for the HTTP client.
+  #[must_use]
+  pub fn request_timeout(mut self, timeout: std::time::Duration) -> Self {
+    self.request_timeout = Some(timeout);
+    self
+  }
+
   /// Return a `Client` to interact with a v2 registry.
   pub fn build(self) -> Result<Client> {
     let base = if self.insecure_registry {
@@ -100,6 +116,13 @@ impl Config {
     };
 
     let mut builder = reqwest::ClientBuilder::new().danger_accept_invalid_certs(self.accept_invalid_certs);
+
+    if let Some(timeout) = self.connect_timeout {
+      builder = builder.connect_timeout(timeout);
+    }
+    if let Some(timeout) = self.request_timeout {
+      builder = builder.timeout(timeout);
+    }
 
     for ca in self.root_certificates {
       builder = builder.add_root_certificate(ca)
@@ -156,6 +179,8 @@ impl Default for Config {
       user_agent: Some(crate::USER_AGENT.to_owned()),
       username: None,
       password: None,
+      connect_timeout: None,
+      request_timeout: None,
     }
   }
 }
