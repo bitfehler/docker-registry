@@ -86,3 +86,73 @@ struct Auths {
 struct AuthObj {
   auth: String,
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_get_credentials_valid() {
+    let config = r#"{"auths":{"https://index.docker.io/v1/":{"auth":"dXNlcjpwYXNz"}}}"#;
+    let (user, pass) = get_credentials(config.as_bytes(), "docker.io").unwrap();
+    assert_eq!(user, Some("user".to_string()));
+    assert_eq!(pass, Some("pass".to_string()));
+  }
+
+  #[test]
+  fn test_get_credentials_registry1_docker_io() {
+    let config = r#"{"auths":{"https://index.docker.io/v1/":{"auth":"dXNlcjpwYXNz"}}}"#;
+    let (user, pass) = get_credentials(config.as_bytes(), "registry-1.docker.io").unwrap();
+    assert_eq!(user, Some("user".to_string()));
+    assert_eq!(pass, Some("pass".to_string()));
+  }
+
+  #[test]
+  fn test_get_credentials_custom_registry() {
+    // base64("admin:secret") = "YWRtaW46c2VjcmV0"
+    let config = r#"{"auths":{"myregistry.example.com":{"auth":"YWRtaW46c2VjcmV0"}}}"#;
+    let (user, pass) = get_credentials(config.as_bytes(), "myregistry.example.com").unwrap();
+    assert_eq!(user, Some("admin".to_string()));
+    assert_eq!(pass, Some("secret".to_string()));
+  }
+
+  #[test]
+  fn test_get_credentials_missing_registry() {
+    let config = r#"{"auths":{"other.io":{"auth":"dXNlcjpwYXNz"}}}"#;
+    let result = get_credentials(config.as_bytes(), "missing.io");
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), Error::AuthInfoMissing(_)));
+  }
+
+  #[test]
+  fn test_get_credentials_empty_user() {
+    // base64(":password") = "OnBhc3N3b3Jk"
+    let config = r#"{"auths":{"reg.io":{"auth":"OnBhc3N3b3Jk"}}}"#;
+    let (user, pass) = get_credentials(config.as_bytes(), "reg.io").unwrap();
+    assert_eq!(user, None);
+    assert_eq!(pass, Some("password".to_string()));
+  }
+
+  #[test]
+  fn test_get_credentials_empty_password() {
+    // base64("user:") = "dXNlcjo="
+    let config = r#"{"auths":{"reg.io":{"auth":"dXNlcjo="}}}"#;
+    let (user, pass) = get_credentials(config.as_bytes(), "reg.io").unwrap();
+    assert_eq!(user, Some("user".to_string()));
+    assert_eq!(pass, None);
+  }
+
+  #[test]
+  fn test_get_credentials_invalid_json() {
+    let config = r#"not json"#;
+    let result = get_credentials(config.as_bytes(), "reg.io");
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_get_credentials_invalid_base64() {
+    let config = r#"{"auths":{"reg.io":{"auth":"!!!invalid!!!"}}}"#;
+    let result = get_credentials(config.as_bytes(), "reg.io");
+    assert!(result.is_err());
+  }
+}
