@@ -18,54 +18,63 @@ pub struct Config {
 
 impl Config {
   /// Set registry service to use (vhost or IP).
+  #[must_use]
   pub fn registry(mut self, reg: &str) -> Self {
     self.index = reg.to_owned();
     self
   }
 
   /// Whether to use an insecure HTTP connection to the registry.
+  #[must_use]
   pub fn insecure_registry(mut self, insecure: bool) -> Self {
     self.insecure_registry = insecure;
     self
   }
 
   /// Set whether or not to accept invalid certificates.
+  #[must_use]
   pub fn accept_invalid_certs(mut self, accept_invalid_certs: bool) -> Self {
     self.accept_invalid_certs = accept_invalid_certs;
     self
   }
 
   /// Add a root certificate the client should trust for TLS verification
+  #[must_use]
   pub fn add_root_certificate(mut self, certificate: Certificate) -> Self {
     self.root_certificates.push(certificate);
     self
   }
 
   /// Set custom Accept headers
+  #[must_use]
   pub fn accepted_types(mut self, accepted_types: Option<Vec<(MediaTypes, Option<f64>)>>) -> Self {
     self.accepted_types = accepted_types;
     self
   }
 
   /// Set the user-agent to be used for registry authentication.
+  #[must_use]
   pub fn user_agent(mut self, user_agent: Option<String>) -> Self {
     self.user_agent = user_agent;
     self
   }
 
   /// Set the username to be used for registry authentication.
+  #[must_use]
   pub fn username(mut self, user: Option<String>) -> Self {
     self.username = user;
     self
   }
 
   /// Set the password to be used for registry authentication.
+  #[must_use]
   pub fn password(mut self, password: Option<String>) -> Self {
     self.password = password;
     self
   }
 
   /// Read credentials from a JSON config file
+  #[must_use]
   pub fn read_credentials<T: ::std::io::Read>(mut self, reader: T) -> Self {
     if let Ok(creds) = crate::get_credentials(reader, &self.index) {
       self.username = creds.0;
