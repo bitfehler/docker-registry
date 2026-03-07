@@ -17,6 +17,9 @@ pub use self::manifest_schema2::{
   ConfigBlob, ManifestList, ManifestObj, ManifestSchema2, ManifestSchema2Spec, Platform,
 };
 
+mod oci_image_index;
+pub use self::oci_image_index::{OciDescriptor, OciImageIndex};
+
 impl Client {
   /// Fetch an image manifest.
   ///
@@ -82,8 +85,11 @@ impl Client {
           content_digest,
         ))
       }
-      mediatypes::MediaTypes::ManifestList | mediatypes::MediaTypes::OciImageIndexV1 => {
+      mediatypes::MediaTypes::ManifestList => {
         Ok((res.json::<ManifestList>().await.map(Manifest::ML)?, content_digest))
+      }
+      mediatypes::MediaTypes::OciImageIndexV1 => {
+        Ok((res.json::<OciImageIndex>().await.map(Manifest::OciIndex)?, content_digest))
       }
       unsupported => Err(Error::UnsupportedMediaType(unsupported)),
     }
@@ -255,6 +261,7 @@ pub enum Manifest {
   S1Signed(manifest_schema1::ManifestSchema1Signed),
   S2(manifest_schema2::ManifestSchema2),
   ML(manifest_schema2::ManifestList),
+  OciIndex(oci_image_index::OciImageIndex),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -304,6 +311,7 @@ impl Manifest {
         Ok(m.get_layers())
       }
       (Manifest::ML(m), _, _) => Ok(m.get_digests()),
+      (Manifest::OciIndex(m), _, _) => Ok(m.get_digests()),
       _ => Err(ManifestError::LayerDigestsUnsupported(format!("{self:?}")).into()),
     }
   }
@@ -314,6 +322,7 @@ impl Manifest {
       Manifest::S1Signed(m) => Ok([m.architecture.clone()].to_vec()),
       Manifest::S2(m) => Ok([m.architecture()].to_vec()),
       Manifest::ML(m) => Ok(m.architectures()),
+      Manifest::OciIndex(m) => Ok(m.architectures()),
     }
   }
 }

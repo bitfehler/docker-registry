@@ -121,3 +121,19 @@ fn test_labels_manifest_v2s1_signed() {
   assert_eq!(expected_labels_0, labels_0);
   assert_eq!(None, manif.get_labels(1));
 }
+
+#[test]
+fn test_deserialize_oci_image_index() {
+  let f = fs::File::open("tests/fixtures/oci_image_index.json").expect("Missing fixture");
+  let bufrd = io::BufReader::new(f);
+  let index: docker_registry::v2::manifest::OciImageIndex = serde_json::from_reader(bufrd).unwrap();
+
+  assert_eq!(index.artifact_type(), Some("application/vnd.example.sbom.v1"));
+  assert_eq!(index.manifests.len(), 2);
+  assert_eq!(index.architectures(), vec!["amd64", "arm64"]);
+  assert!(index.subject().is_some());
+  assert_eq!(
+    index.annotations().unwrap().get("org.opencontainers.image.created").unwrap(),
+    "2024-01-01T00:00:00Z"
+  );
+}
