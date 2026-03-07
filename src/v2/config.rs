@@ -106,14 +106,18 @@ impl Config {
     } else {
       "https://".to_string() + &self.index
     };
-    trace!(
-      "Built client for {:?}: endpoint {:?} - user {:?}",
-      self.index, base, self.username
-    );
+    trace!("Built client for {:?}: endpoint {:?}", self.index, base);
     let creds = match (self.username, self.password) {
       (None, None) => None,
       (u, p) => Some((u.unwrap_or_else(|| "".into()), p.unwrap_or_else(|| "".into()))),
     };
+
+    if self.insecure_registry && creds.is_some() {
+      log::warn!(
+        "Registry {:?} is configured with insecure HTTP; credentials will be transmitted in cleartext",
+        self.index
+      );
+    }
 
     let mut builder = reqwest::ClientBuilder::new().danger_accept_invalid_certs(self.accept_invalid_certs);
 

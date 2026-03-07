@@ -316,7 +316,7 @@ impl Client {
 
     trace!("Sending request to '{url}'");
     let resp = req.send().await?;
-    trace!("GET '{resp:?}'");
+    trace!("GET '{url}' status={}", resp.status());
 
     let status = resp.status();
     match status {
