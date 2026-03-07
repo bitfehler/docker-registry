@@ -71,6 +71,32 @@ where
     return Err(RenderError::WrongTargetPath(target_dir.to_path_buf()));
   }
   for l in layers {
+    // Pre-pass: handle opaque whiteouts BEFORE unpacking so that
+    // new files from the current layer survive the directory clearing.
+    let reader = decompress(l.as_slice())?;
+    let mut archive = tar::Archive::new(reader);
+    for entry in archive.entries()? {
+      let file = entry?;
+      let path = file.path()?;
+      let parent = path.parent().unwrap_or_else(|| path::Path::new("/"));
+      if let Some(fname) = path.file_name() {
+        if fname.to_string_lossy() == ".wh..wh..opq" {
+          let rel_parent = path::PathBuf::from("./".to_string() + &parent.to_string_lossy());
+          let abs_parent = target_dir.join(&rel_parent);
+          if abs_parent.is_dir() {
+            for dir_entry in fs::read_dir(&abs_parent)? {
+              let dir_entry = dir_entry?;
+              if dir_entry.path().is_dir() {
+                fs::remove_dir_all(dir_entry.path())?;
+              } else {
+                fs::remove_file(dir_entry.path())?;
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Unpack layers
     let reader = decompress(l.as_slice())?;
     let mut archive = tar::Archive::new(reader);
@@ -88,7 +114,10 @@ where
       if let Some(fname) = path.file_name() {
         let wh_name = fname.to_string_lossy();
         if wh_name == ".wh..wh..opq" {
-          //TODO(lucab): opaque whiteout, dir removal
+          // Already handled in pre-pass; just remove the marker.
+          let rel_parent = path::PathBuf::from("./".to_string() + &parent.to_string_lossy());
+          let abs_wh_path = target_dir.join(&rel_parent).join(fname);
+          remove_whiteout(abs_wh_path)?;
         } else if wh_name.starts_with(".wh.") {
           let rel_parent = path::PathBuf::from("./".to_string() + &parent.to_string_lossy());
 
@@ -309,6 +338,92 @@ mod tests {
     let layer2 = make_zstd_layer(".wh.myfile.txt", b"");
     unpack(&[layer1, layer2], dir.path()).unwrap();
     assert!(!dir.path().join("myfile.txt").exists());
+  }
+
+  #[test]
+  fn test_opaque_whiteout_clears_directory() {
+    let dir = tempfile::tempdir().unwrap();
+
+    // Layer 1: create a directory with files
+    let mut tar_buf = Vec::new();
+    {
+      let mut builder = tar::Builder::new(&mut tar_buf);
+
+      // Create dir
+      let mut header = tar::Header::new_gnu();
+      header.set_path("mydir/").unwrap();
+      header.set_size(0);
+      header.set_mode(0o755);
+      header.set_entry_type(tar::EntryType::Directory);
+      header.set_cksum();
+      builder.append(&header, &[] as &[u8]).unwrap();
+
+      // Create file inside dir
+      let content = b"old content";
+      let mut header = tar::Header::new_gnu();
+      header.set_path("mydir/old_file.txt").unwrap();
+      header.set_size(content.len() as u64);
+      header.set_mode(0o644);
+      header.set_cksum();
+      builder.append(&header, content.as_slice()).unwrap();
+
+      builder.finish().unwrap();
+    }
+    let mut gz_buf = Vec::new();
+    {
+      let mut encoder = gzip::Encoder::new(&mut gz_buf).unwrap();
+      io::Write::write_all(&mut encoder, &tar_buf).unwrap();
+      encoder.finish().into_result().unwrap();
+    }
+    let layer1 = gz_buf;
+
+    // Layer 2: opaque whiteout marker + new file in same dir
+    let mut tar_buf2 = Vec::new();
+    {
+      let mut builder = tar::Builder::new(&mut tar_buf2);
+
+      // Opaque whiteout marker
+      let mut header = tar::Header::new_gnu();
+      header.set_path("mydir/.wh..wh..opq").unwrap();
+      header.set_size(0);
+      header.set_mode(0o644);
+      header.set_cksum();
+      builder.append(&header, &[] as &[u8]).unwrap();
+
+      // New file in the same directory
+      let content = b"new content";
+      let mut header = tar::Header::new_gnu();
+      header.set_path("mydir/new_file.txt").unwrap();
+      header.set_size(content.len() as u64);
+      header.set_mode(0o644);
+      header.set_cksum();
+      builder.append(&header, content.as_slice()).unwrap();
+
+      builder.finish().unwrap();
+    }
+    let mut gz_buf2 = Vec::new();
+    {
+      let mut encoder = gzip::Encoder::new(&mut gz_buf2).unwrap();
+      io::Write::write_all(&mut encoder, &tar_buf2).unwrap();
+      encoder.finish().into_result().unwrap();
+    }
+    let layer2 = gz_buf2;
+
+    unpack(&[layer1, layer2], dir.path()).unwrap();
+
+    // Old file should be gone (opaque whiteout clears directory)
+    assert!(
+      !dir.path().join("mydir/old_file.txt").exists(),
+      "opaque whiteout should have removed old_file.txt"
+    );
+    // New file from layer 2 should exist
+    assert!(dir.path().join("mydir/new_file.txt").exists());
+    assert_eq!(
+      fs::read_to_string(dir.path().join("mydir/new_file.txt")).unwrap(),
+      "new content"
+    );
+    // Directory itself should still exist
+    assert!(dir.path().join("mydir").is_dir());
   }
 
   #[test]
